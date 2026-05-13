@@ -6,6 +6,13 @@ import { AppProviders } from '@/providers/AppProviders'
 import { routeTree } from './routeTree.gen'
 import './index.css'
 
+const redirectPath = new URLSearchParams(window.location.search).get('p')
+
+if (redirectPath) {
+  const normalizedPath = redirectPath.startsWith('/') ? redirectPath : `/${redirectPath}`
+  window.history.replaceState(null, '', normalizedPath)
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
