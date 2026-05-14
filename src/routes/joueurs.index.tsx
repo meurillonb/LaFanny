@@ -5,7 +5,7 @@ import {
   Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
   Drawer, FormControl, FormLabel, IconButton, Switch, Typography,
 } from '@mui/material'
-import { Add, Close, FileUpload, Female, Male, Save } from '@mui/icons-material'
+import { Add, CheckCircle, Close, Delete, FileUpload, Female, Male, RadioButtonUnchecked, Save } from '@mui/icons-material'
 import { useJoueurStore } from '@/stores/joueurStore'
 import { parseCsvJoueurs } from '@/lib/csvImport'
 import type { Genre, Joueur, NiveauJoueur, RoleJoueur } from '@/types/domain'
@@ -211,7 +211,7 @@ function EditJoueurDrawer({
 
 /* ─── Page principale ────────────────────────────────────────────────────── */
 function JoueursPage() {
-  const { joueurs, loading, load, update, setPresent, importJoueurs } = useJoueurStore()
+  const { joueurs, loading, load, update, removeMany, setPresent, importJoueurs } = useJoueurStore()
 
   /* Tri alphabétique par prénom puis nom */
   const joueursTries = useMemo(
@@ -237,6 +237,29 @@ function JoueursPage() {
   } | null>(null)
   /* Joueur en cours d'édition dans le Drawer */
   const [editingJoueur, setEditingJoueur] = useState<Joueur | null>(null)
+
+  /* Mode suppression */
+  const [deleteMode, setDeleteMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+
+  const toggleSelect = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+
+  const exitDeleteMode = () => {
+    setDeleteMode(false)
+    setSelectedIds(new Set())
+  }
+
+  const handleDeleteConfirmed = async () => {
+    await removeMany([...selectedIds])
+    setDeleteConfirmOpen(false)
+    exitDeleteMode()
+  }
 
   useEffect(() => { void load() }, [load])
 
@@ -307,39 +330,68 @@ function JoueursPage() {
   return (
     <div className="flex flex-col gap-4">
       {/* En-tête */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold" style={{ fontFamily: 'Oswald, sans-serif' }}>
-          Joueurs
-          <span className="ml-2 text-sm font-normal text-gray-400">({joueurs.length})</span>
-        </h1>
-        <div className="flex gap-2">
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={importing ? <CircularProgress size={14} /> : <FileUpload />}
-            disabled={importing}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            Importer
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,text/csv"
-            className="hidden"
-            onChange={handleFileChange}
-          />
-          <Button
-            component={Link as React.ElementType}
-            to="/joueurs/nouveau"
-            variant="contained"
-            size="small"
-            startIcon={<Add />}
-          >
-            Ajouter
-          </Button>
+      {!deleteMode ? (
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold" style={{ fontFamily: 'Oswald, sans-serif' }}>
+            Joueurs
+            <span className="ml-2 text-sm font-normal text-gray-400">({joueurs.length})</span>
+          </h1>
+          <div className="flex gap-2 items-center">
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={importing ? <CircularProgress size={14} /> : <FileUpload />}
+              disabled={importing}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              Importer
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+            <Button
+              component={Link as React.ElementType}
+              to="/joueurs/nouveau"
+              variant="contained"
+              size="small"
+              startIcon={<Add />}
+            >
+              Ajouter
+            </Button>
+            {joueurs.length > 0 && (
+              <IconButton size="small" color="error" onClick={() => setDeleteMode(true)} aria-label="Mode suppression">
+                <Delete fontSize="small" />
+              </IconButton>
+            )}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="flex items-center justify-between">
+          <button
+            type="button"
+            className="text-sm font-medium text-primary"
+            onClick={() =>
+              setSelectedIds(
+                selectedIds.size === joueursTries.length
+                  ? new Set()
+                  : new Set(joueursTries.map((j) => j.id)),
+              )
+            }
+          >
+            {selectedIds.size === joueursTries.length ? 'Désélectionner tout' : 'Tout sélectionner'}
+          </button>
+          <span className="text-sm text-gray-500 dark:text-gray-400">
+            {selectedIds.size > 0 ? `${selectedIds.size} sélectionné(s)` : 'Appuyer pour sélectionner'}
+          </span>
+          <button type="button" className="text-sm font-medium text-primary" onClick={exitDeleteMode}>
+            Annuler
+          </button>
+        </div>
+      )}
 
       {/* Feedback import */}
       {importFeedback && (
@@ -352,46 +404,66 @@ function JoueursPage() {
 
       {/* Liste des joueurs */}
       <div className="flex flex-col gap-2">
-        {joueursTries.map((j) => (
-          <div
-            key={j.id}
-            className="flex items-center justify-between bg-white dark:bg-[#1E1E1E] rounded-xl px-4 py-2 shadow-sm dark:border dark:border-gray-800"
-          >
-            {/* Zone cliquable → édition */}
-            <button
-              type="button"
-              className="flex items-center gap-2 min-w-0 flex-1 text-left py-1 rounded-lg hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
-              onClick={() => setEditingJoueur(j)}
-              aria-label={`Modifier ${j.prenom ?? ''} ${j.nom}`}
+        {joueursTries.map((j) => {
+          const isSelected = selectedIds.has(j.id)
+          return (
+            <div
+              key={j.id}
+              className={[
+                'flex items-center justify-between rounded-xl px-4 py-2 shadow-sm dark:border dark:border-gray-800 transition-colors',
+                deleteMode ? 'cursor-pointer' : '',
+                deleteMode && isSelected ? 'bg-red-50 dark:bg-red-900/20' : 'bg-white dark:bg-[#1E1E1E]',
+              ].join(' ')}
+              onClick={deleteMode ? () => toggleSelect(j.id) : undefined}
             >
-              {j.genre === 'F'
-                ? <Female sx={{ fontSize: 16, color: 'rgb(244 114 182)', flexShrink: 0 }} />
-                : <Male sx={{ fontSize: 16, color: '#64748b', flexShrink: 0 }} />
-              }
-              <span className="font-medium truncate">
-                {j.prenom ? `${j.prenom} ${j.nom}` : j.nom}
-              </span>
-              {j.role && (
-                <Chip
+              {/* Checkbox mode suppression */}
+              {deleteMode && (
+                <span className="mr-2 flex-shrink-0">
+                  {isSelected
+                    ? <CheckCircle sx={{ fontSize: 22, color: 'error.main' }} />
+                    : <RadioButtonUnchecked sx={{ fontSize: 22, color: 'text.disabled' }} />
+                  }
+                </span>
+              )}
+
+              {/* Zone joueur */}
+              <button
+                type="button"
+                className={`flex items-center gap-2 min-w-0 flex-1 text-left py-1 rounded-lg transition-colors${deleteMode ? ' pointer-events-none' : ' hover:bg-gray-50 dark:hover:bg-white/5'}`}
+                onClick={deleteMode ? undefined : () => setEditingJoueur(j)}
+                aria-label={`Modifier ${j.prenom ?? ''} ${j.nom}`}
+              >
+                {j.genre === 'F'
+                  ? <Female sx={{ fontSize: 16, color: 'rgb(244 114 182)', flexShrink: 0 }} />
+                  : <Male sx={{ fontSize: 16, color: '#64748b', flexShrink: 0 }} />
+                }
+                <span className="font-medium truncate">
+                  {j.prenom ? `${j.prenom} ${j.nom}` : j.nom}
+                </span>
+                {j.role && (
+                  <Chip
+                    size="small"
+                    label={j.role}
+                    variant="outlined"
+                    sx={{ fontSize: '0.65rem', height: 18, flexShrink: 0 }}
+                  />
+                )}
+              </button>
+
+              {/* Switch présent/absent */}
+              {!deleteMode && (
+                <Switch
                   size="small"
-                  label={j.role}
-                  variant="outlined"
-                  sx={{ fontSize: '0.65rem', height: 18, flexShrink: 0 }}
+                  checked={j.presentSessionSuivante}
+                  onChange={(e) => { void setPresent(j.id, e.target.checked) }}
+                  color="success"
+                  slotProps={{ input: { 'aria-label': `${j.prenom ?? j.nom} présent` } }}
+                  sx={{ ml: 1, flexShrink: 0 }}
                 />
               )}
-            </button>
-
-            {/* Switch présent/absent */}
-            <Switch
-              size="small"
-              checked={j.presentSessionSuivante}
-              onChange={(e) => { void setPresent(j.id, e.target.checked) }}
-              color="success"
-              slotProps={{ input: { 'aria-label': `${j.prenom ?? j.nom} présent` } }}
-              sx={{ ml: 1, flexShrink: 0 }}
-            />
-          </div>
-        ))}
+            </div>
+          )
+        })}
 
         {!loading && joueurs.length === 0 && (
           <div className="flex flex-col items-center gap-3 py-12 text-center">
@@ -403,6 +475,22 @@ function JoueursPage() {
           </div>
         )}
       </div>
+
+      {/* Barre de suppression */}
+      {deleteMode && selectedIds.size > 0 && (
+        <div className="sticky bottom-4 z-10">
+          <Button
+            variant="contained"
+            color="error"
+            fullWidth
+            startIcon={<Delete />}
+            onClick={() => setDeleteConfirmOpen(true)}
+            sx={{ borderRadius: 3, py: 1.2, fontFamily: 'Oswald, sans-serif', fontSize: '1rem', letterSpacing: '0.05em', boxShadow: 4 }}
+          >
+            Supprimer {selectedIds.size} joueur{selectedIds.size > 1 ? 's' : ''}
+          </Button>
+        </div>
+      )}
 
       {/* Drawer d'édition */}
       <EditJoueurDrawer
@@ -442,6 +530,28 @@ function JoueursPage() {
             disabled={(confirmDialog?.stats.new ?? 0) === 0}
           >
             Importer {confirmDialog?.stats.new} joueur(s)
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog confirmation suppression */}
+      <Dialog
+        open={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+        slotProps={{ paper: { sx: { borderRadius: 3, mx: 2 } } }}
+      >
+        <DialogTitle sx={{ fontFamily: 'Oswald, sans-serif', fontWeight: 700 }}>
+          Supprimer les joueurs ?
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {selectedIds.size} joueur{selectedIds.size > 1 ? 's seront supprimés' : ' sera supprimé'} définitivement.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button onClick={() => setDeleteConfirmOpen(false)} color="inherit">Annuler</Button>
+          <Button onClick={() => void handleDeleteConfirmed()} variant="contained" color="error">
+            Supprimer
           </Button>
         </DialogActions>
       </Dialog>

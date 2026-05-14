@@ -12,6 +12,7 @@ interface JoueurState {
   add: (j: Omit<Joueur, 'id' | 'createdAt'>) => Promise<void>
   update: (id: string, patch: Partial<Joueur>) => Promise<void>
   remove: (id: string) => Promise<void>
+  removeMany: (ids: string[]) => Promise<void>
   setPresent: (id: string, present: boolean) => Promise<void>
   /** Import une liste de joueurs CSV — ignore les doublons (même nom) */
   importJoueurs: (rows: Omit<Joueur, 'id' | 'createdAt'>[]) => Promise<ImportStats>
@@ -46,6 +47,12 @@ export const useJoueurStore = create<JoueurState>()(
     remove: async (id) => {
       await db.joueurs.update(id, { actif: false, _dirty: true })
       set((s) => { s.joueurs = s.joueurs.filter((j) => j.id !== id) })
+    },
+
+    removeMany: async (ids) => {
+      await Promise.all(ids.map((id) => db.joueurs.update(id, { actif: false, _dirty: true })))
+      const idSet = new Set(ids)
+      set((s) => { s.joueurs = s.joueurs.filter((j) => !idSet.has(j.id)) })
     },
 
     setPresent: async (id, present) => {
