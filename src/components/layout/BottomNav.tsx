@@ -6,7 +6,6 @@ const NAV = [
   { to: '/',           label: 'Accueil',    icon: <Home /> },
   { to: '/joueurs',    label: 'Joueurs',    icon: <Group /> },
   { to: '/concours',   label: 'Classement', icon: <Leaderboard /> },
-  { to: '/parametres', label: 'Réglages',   icon: <Settings /> },
 ] as const
 
 export function BottomNav() {

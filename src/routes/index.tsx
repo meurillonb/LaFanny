@@ -187,9 +187,6 @@ function HomePage() {
               Tournois en cours
             </Typography>
           </Box>
-          <Button component={Link as React.ElementType} to="/concours/nouveau" variant="contained" size="small" startIcon={<Add />}>
-            Nouveau
-          </Button>
         </Box>
 
         {actifs.length === 0 ? (
